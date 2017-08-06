@@ -25,14 +25,18 @@ import org.bukkit.event.entity.EntityInteractEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
-import org.bukkit.event.player.PLayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
+
+import com.plugin.ftb.battleroyale.team.TeamConfig;
+import com.plugin.ftb.battleroyale.team.TeamGUI;
 
 class RunTP extends BukkitRunnable{
 
@@ -103,6 +107,9 @@ class RunTP extends BukkitRunnable{
 		MainListener.blockReset=false;
 
 		resetVar();
+		
+		//チームをリセットする
+		TeamConfig.removeAllTeams();
 
 		this.cancel();
 	}
@@ -372,6 +379,7 @@ public class MainListener implements Listener {
 					 */
 					broadcast(ChatColor.DARK_AQUA + "------------終了------------");
 					ArrayList<ArrayList<String>> rankStrings = new ArrayList<>();
+					ArrayList<Player> topPlayers = new ArrayList<>();
 					//仮の要素を挿入
 					rankStrings.add(new ArrayList<String>());
 					rankStrings.add(new ArrayList<String>());
@@ -406,12 +414,32 @@ public class MainListener implements Listener {
 								+ " " + ChatColor.RED + killCount.get(deathPlayer.get(i)) + ChatColor.GRAY + " kill"));
 						
 						rankStrings.set(rank, value);
+						
+						//1位のプレイヤーを保存
+						if(rank == 0) {
+							topPlayers.add( deathPlayer.get(i));
+						}
 					}
 					
 					//表示
 					for(ArrayList<String> values : rankStrings) {
 						for(String value : values) {
 							broadcast(value);
+						}
+					}
+					
+					//優勝チームを発表
+					String topTeamMessage = ChatColor.GOLD + "優勝チームメンバー\n";
+					ArrayList<Team> sameTeams = new ArrayList<>();
+					for(Player top : topPlayers) {
+						Team team = board.getPlayerTeam(top);
+						if(team != null && !sameTeams.contains(team)) {
+							topTeamMessage += ChatColor.GOLD + " " + team.getName();
+							for(OfflinePlayer teamMember : team.getPlayers()) {
+								topTeamMessage += " " + ChatColor.WHITE + teamMember.getName();
+							}
+							topTeamMessage += "\n";
+							sameTeams.add(team);
 						}
 					}
 					
@@ -459,8 +487,9 @@ public class MainListener implements Listener {
 			event.setCancelled(true);
 		}
 	}
+	
 	@SuppressWarnings("deprecation")
-	@EventHandler(ignoreCancelled=true)
+	@EventHandler
 	public void onPlayerInteractEvent(PlayerInteractEvent event) {
 		Player player = event.getPlayer();
 		Scoreboard board = plugin.getServer().getScoreboardManager().getMainScoreboard();
@@ -469,7 +498,15 @@ public class MainListener implements Listener {
 			&& event.getClickedBlock().getType().equals(Material.SOIL) && board.getTeam(TEAM_ALIVE_NAME).hasPlayer(player)) {
 			event.setCancelled(true);
 		}
-
+		
+		//チーム表示用本をクリックしたとき
+		if(event.getAction().equals(Action.RIGHT_CLICK_AIR) || event.getAction().equals(Action.RIGHT_CLICK_BLOCK)) {
+			ItemStack item = player.getItemInHand();
+			if(ChatColor.stripColor(item.getItemMeta().getDisplayName()).equals("右クリックでチームを見る")) {
+				//チームGUIを表示
+				TeamGUI.displayMainGUI(player);
+			}
+		}
 	}
 
 	//チェストの初期化が行われたときドロップしたアイテムを削除する
@@ -491,93 +528,18 @@ public class MainListener implements Listener {
 			e.setCancelled(true);
 		}
 	}
-	
-	//HP減ったらプレイヤーのスピードを下げる
-    @EventHandler
-    public void onMove(PlayerMoveEvent e) {
-        if(e.isCancelled()) {
-            return;
-        }
-        Player p = e.getPlayer();
-        
-        int hpint = (int) Math.floor(p.getHealth());
-        
-        double exchange = 1.0;
-        
-        switch (hpint) {
-        case 10:
-            exchange = 0.95;
-        break;
-        
-        case 9:
-            exchange = 0.9;
-            break;
-        
-        case 8:
-            exchange = 0.85;
-            break;
-        
-        case 7:
-            exchange = 0.8;
-        break;
-        
-        case 6:
-            exchange = 0.75;
-            break;
-        
-        case 5:
-            exchange = 0.7;
-            break;
 
-        case 4:
-            exchange = 0.65;
-            break;
-        
-        case 3:
-            exchange = 0.6;
-            break;
-        
-        case 2:
-            exchange = 0.55;
-        break;
-        
-        case 1:
-            exchange = 0.5;
-            break;
-        
-        case 0:
-            exchange = 0.0;
-            break;
-            
-        default:
-            p.setWalkSpeed(0.2f);
-            break;
-        }
-        
-        if(hpint == 20) {
-            p.setWalkSpeed(0.2f);
-        }
-        
-        double f = 0.2 * exchange;
-        float ps = p.getWalkSpeed();
-        	if(!(f == ps)) {
-            	p.setWalkSpeed((float) f);
-        	}
-    	}
-
-	//////////////////////////////////////////////////////////////////////////
-	//チーム用に作ったんで置いといてください。kanaami
-	//////////////////////////////////////////////////////////////////////////
 	/*
-	//GUIをクリックしたときの動作
+	 * GUIをクリックしたときの動作
+	 */
 	@EventHandler
 	public void onInventoryClick(InventoryClickEvent event) {
 		//null回避
-		if(event.getClickedInventory() == null || event.getCurrentItem() == null || event.getCurrentItem().getItemMeta() == null) {
+		if(event.getInventory() == null || event.getCurrentItem() == null || event.getCurrentItem().getItemMeta() == null) {
 			return;
 		}
 
-		String inventoryName = event.getClickedInventory().getName();
+		String inventoryName = event.getInventory().getName();
 
 		//Mainインベントリをクリックしたとき
 		if(inventoryName.equals("Main")){
@@ -586,19 +548,26 @@ public class MainListener implements Listener {
 
 			Player player = (Player) event.getWhoClicked();
 			String displayName = event.getCurrentItem().getItemMeta().getDisplayName();
+			
+			//ゲーム中以外は使用不可
+			if(StartCommand.start == 0) {
+				player.sendMessage(BattleRoyale.prefix + ChatColor.RED + "まだゲームがスタートしていません。");
+				return;
+			}
+			
 			//チームを作成をクリックしたとき
 			if(displayName.equals("チームを作成")) {
 				//既にチームに参加していた場合
-				if(MainConfig.teamHasPlayer(player)) {
+				if(TeamConfig.teamHasPlayer(player)) {
 					player.sendMessage(BattleRoyale.prefix + ChatColor.RED + "既に他のチームに参加しています。");
 				}else {
 					//新規チームを作成
-					MainConfig.loadConfig();
+					TeamConfig.loadConfig();
 					int teamNumber = 1;
 					if(MainConfig._teams.keySet() != null) {
 						teamNumber = MainConfig._teams.keySet().size() + 1;
 					}
-					MainConfig.makeTeam("チーム" + teamNumber);
+					TeamConfig.makeTeam("チーム" + teamNumber);
 					//再表示
 					TeamGUI.displayMainGUI(player);
 				}
@@ -606,10 +575,10 @@ public class MainListener implements Listener {
 			//チームから脱退をクリックしたとき
 			if(displayName.equals("チームから脱退")) {
 				//チームに参加していない場合
-				if(!MainConfig.teamHasPlayer(player)) {
+				if(!TeamConfig.teamHasPlayer(player)) {
 					player.sendMessage(BattleRoyale.prefix + ChatColor.RED + "チームに参加していません。");
 				}else {
-					MainConfig.leaveTeam(player);
+					TeamConfig.leaveTeam(player);
 					player.sendMessage(BattleRoyale.prefix + ChatColor.WHITE + "チームから脱退しました。");
 				}
 				//再表示
@@ -626,7 +595,7 @@ public class MainListener implements Listener {
 			//エメラルド(チーム一覧)をクリックしたとき
 			if(event.getCurrentItem().getType().equals(Material.EMERALD)) {
 				MainConfig.loadConfig();
-				if(MainConfig.teamHasPlayer(player)) {
+				if(TeamConfig.teamHasPlayer(player)) {
 					player.sendMessage(BattleRoyale.prefix + ChatColor.RED + "既にチームに参加しています。");
 					//再表示
 					TeamGUI.displayMainGUI(player);
@@ -638,7 +607,7 @@ public class MainListener implements Listener {
 				//既に同じチームに入っていないときのみ
 				if(uuids == null || !uuids.contains(player.getUniqueId().toString())) {
 					//チームに参加
-					MainConfig.joinTeam(teamName, player);
+					TeamConfig.joinTeam(teamName, player);
 					player.sendMessage(BattleRoyale.prefix + ChatColor.WHITE + "チームに参加しました。");
 				}else {
 					player.sendMessage(BattleRoyale.prefix + ChatColor.RED + "既にこのチームに参加しています。");
@@ -649,7 +618,6 @@ public class MainListener implements Listener {
 			}
 		}
 	}
-	*/
 
 
 	// ブロードキャスト

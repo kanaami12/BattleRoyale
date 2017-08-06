@@ -22,6 +22,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 
+import com.plugin.ftb.battleroyale.team.TeamUtils;
+
 class countDown extends BukkitRunnable{
 
 	public static BattleRoyale plugin = BattleRoyale.plugin;
@@ -65,6 +67,7 @@ class countDown extends BukkitRunnable{
 			PdeathA.setPlusDeath();
 			PdeathA.plus();
 			MainConfig.giveMap();
+			TeamUtils.giveBook();
 		}
 
 		countChat();
